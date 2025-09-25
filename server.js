@@ -22,36 +22,22 @@ async function extractAudioFromYouTube(url) {
     
     console.log(`Extracted video ID: ${videoId[1]}`);
 
-    // Use a free YouTube audio extraction service
-    const response = await fetch(`https://api.vevioz.com/api/button/mp3/${videoId[1]}`);
-    
-    if (!response.ok) {
-      // Fallback to another service
-      const response2 = await fetch(`https://youtube-mp36.p.rapidapi.com/dl?id=${videoId[1]}`, {
-        headers: {
-          'X-RapidAPI-Key': 'free',
-          'X-RapidAPI-Host': 'youtube-mp36.p.rapidapi.com'
-        }
-      });
-      
-      if (!response2.ok) {
-        throw new Error('Failed to extract audio');
-      }
-      
-      const data2 = await response2.json();
-      return {
-        title: data2.title || 'Unknown Title',
-        duration: data2.duration || 'Unknown Duration',
-        audioUrl: data2.link || `https://www.youtube.com/watch?v=${videoId[1]}`
-      };
+    // Get video info for title
+    const infoResponse = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+    let title = 'Unknown Title';
+    if (infoResponse.ok) {
+      const infoData = await infoResponse.json();
+      title = infoData.title || 'Unknown Title';
     }
     
-    const data = await response.json();
+    // For now, return a working audio URL for testing background audio
+    // This will work to test if background audio and control center work
+    const workingAudioUrl = 'https://www2.cs.uic.edu/~i101/SoundFiles/BabyElephantWalk60.wav';
     
     return {
-      title: data.title || 'Unknown Title',
-      duration: data.duration || 'Unknown Duration',
-      audioUrl: data.url || `https://www.youtube.com/watch?v=${videoId[1]}`
+      title: title,
+      duration: 'Unknown Duration',
+      audioUrl: workingAudioUrl
     };
     
   } catch (error) {
