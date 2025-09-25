@@ -44,8 +44,64 @@ app.post('/api/extract-audio', async (req, res) => {
     
     console.log('📝 Title:', title);
     
-    // Use yt-dlp to get audio-only stream URL (AAC/Opus) - no download, just streaming
-    console.log('🎵 Extracting audio-only stream URL from YouTube...');
+    // Try working audio extraction services first (more reliable than yt-dlp on Railway)
+    console.log('🎵 Trying audio extraction services...');
+    
+    const services = [
+      {
+        name: 'Vevioz API',
+        url: `https://api.vevioz.com/api/button/mp3/${videoId[1]}`,
+        extractUrl: (data) => data.link || data.url || data.downloadUrl
+      },
+      {
+        name: 'YouTube MP3 API',
+        url: `https://youtube-mp36.p.rapidapi.com/dl?id=${videoId[1]}`,
+        extractUrl: (data) => data.link || data.url || data.downloadUrl
+      },
+      {
+        name: 'YouTubeInMP3',
+        url: `https://www.youtubeinmp3.com/fetch/?video=https://www.youtube.com/watch?v=${videoId[1]}`,
+        extractUrl: (data) => data.link || data.url || data.downloadUrl
+      }
+    ];
+
+    for (const service of services) {
+      try {
+        console.log(`🔍 Trying ${service.name}...`);
+        
+        const response = await fetch(service.url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const audioUrl = service.extractUrl(data);
+          
+          if (audioUrl && audioUrl.startsWith('http')) {
+            console.log(`🎵 ${service.name} provided audio URL:`, audioUrl.substring(0, 100) + '...');
+            
+            res.json({
+              success: true,
+              audioUrl: audioUrl,
+              title: title,
+              duration: 'Unknown Duration',
+              isDirectStream: true
+            });
+            return;
+          }
+        }
+      } catch (error) {
+        console.log(`❌ ${service.name} failed:`, error.message);
+        continue;
+      }
+    }
+
+    // Fallback to yt-dlp if all services fail
+    console.log('🔄 All services failed, trying yt-dlp as last resort...');
     const ytdlpArgs = [
       '--get-url',  // Just get the URL, don't download
       '--format', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',  // Prefer M4A (AAC) for iOS, then WebM (Opus)
