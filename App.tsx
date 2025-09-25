@@ -125,7 +125,7 @@ export default function App() {
             }
           });
 
-          console.log('🎵 Streaming audio directly from:', audioData.audioUrl);
+          console.log('🎵 Streaming audio directly from:', audioUrl);
 
         } catch (error) {
           Alert.alert('Error', 'Failed to play audio. Please check your URL and try again.');

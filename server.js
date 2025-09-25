@@ -54,6 +54,16 @@ async function extractAudioFromYouTube(url) {
       {
         url: `https://www.youtubeinmp3.com/fetch/?video=https://www.youtube.com/watch?v=${videoId[1]}`,
         extractUrl: (data) => data.link || data.url || data.downloadUrl
+      },
+      // Service 4: YouTube to MP3 Converter
+      {
+        url: `https://www.youtubeinmp3.com/fetch/?video=https://www.youtube.com/watch?v=${videoId[1]}`,
+        extractUrl: (data) => data.link || data.url || data.downloadUrl
+      },
+      // Service 5: Try a different approach - use a working service
+      {
+        url: `https://api.vevioz.com/api/button/mp3/${videoId[1]}`,
+        extractUrl: (data) => data.link || data.url || data.downloadUrl
       }
     ];
 
@@ -133,7 +143,8 @@ app.post('/api/extract-audio', async (req, res) => {
       success: true,
       title: result.title,
       duration: result.duration,
-      audioUrl: result.audioUrl
+      audioUrl: result.audioUrl,
+      url: result.audioUrl  // Also include 'url' field for compatibility
     });
 
   } catch (error) {
