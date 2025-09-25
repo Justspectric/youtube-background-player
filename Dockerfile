@@ -1,17 +1,16 @@
+# Use Node.js 18 as base
 FROM node:18
 
-# Install Python and yt-dlp
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    yt-dlp \
-    && rm -rf /var/lib/apt/lists/*
+# Install Python and yt-dlp using system packages
+RUN apt-get update && \
+    apt-get install -y python3 python3-pip curl yt-dlp && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json ./
+COPY package.json ./
 
 # Install Node.js dependencies
 RUN npm install

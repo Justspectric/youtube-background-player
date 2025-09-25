@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { spawn } = require('child_process');
 const path = require('path');
+const fetch = require('node-fetch');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,13 +44,15 @@ app.post('/api/extract-audio', async (req, res) => {
     
     console.log('📝 Title:', title);
     
-    // Use yt-dlp to get audio stream URL (no download, just URL)
+    // Use yt-dlp to get audio-only stream URL (AAC/Opus) - no download, just streaming
+    console.log('🎵 Extracting audio-only stream URL from YouTube...');
     const ytdlpArgs = [
       '--get-url',  // Just get the URL, don't download
-      '--format', 'bestaudio[ext=m4a]/bestaudio',  // Prefer M4A for iOS compatibility
+      '--format', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',  // Prefer M4A (AAC) for iOS, then WebM (Opus)
       '--no-playlist',  // Don't download playlists
-      '--extractor-args', 'youtube:player_client=ios',  // Use iOS client to avoid restrictions
+      '--extractor-args', 'youtube:player_client=ios',  // Use iOS client for better compatibility
       '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
+      '--no-check-certificate',  // Skip SSL verification
       url
     ];
     
@@ -89,14 +92,69 @@ app.post('/api/extract-audio', async (req, res) => {
         console.log('❌ yt-dlp failed or no URL found');
         console.log('Error output:', errorOutput);
         
-        // Fallback to sample audio
-        res.json({
-          success: false,
-          audioUrl: 'https://www.learningcontainer.com/wp-content/uploads/2020/02/Kalimba.mp3',
-          title: title,
-          duration: 'Unknown Duration',
-          isDirectStream: false,
-          error: 'yt-dlp failed to extract audio URL'
+        // Try alternative yt-dlp approach with web client
+        console.log('🔄 Trying alternative yt-dlp approach...');
+        const altYtdlpArgs = [
+          '--get-url',
+          '--format', 'bestaudio',
+          '--no-playlist',
+          '--extractor-args', 'youtube:player_client=web',
+          '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          url
+        ];
+        
+        const altYtdlp = spawn('yt-dlp', altYtdlpArgs);
+        let altAudioUrl = '';
+        let altErrorOutput = '';
+        
+        altYtdlp.stdout.on('data', (data) => {
+          const output = data.toString().trim();
+          console.log('alt yt-dlp output:', output);
+          altAudioUrl = output;
+        });
+        
+        altYtdlp.stderr.on('data', (data) => {
+          const error = data.toString();
+          console.log('alt yt-dlp error:', error);
+          altErrorOutput += error;
+        });
+        
+        altYtdlp.on('close', (altCode) => {
+          console.log('alt yt-dlp process finished with code:', altCode);
+          
+          if (altCode === 0 && altAudioUrl && altAudioUrl.startsWith('http')) {
+            console.log('🎵 Alternative yt-dlp provided audio URL:', altAudioUrl.substring(0, 100) + '...');
+            
+            res.json({
+              success: true,
+              audioUrl: altAudioUrl,
+              title: title,
+              duration: 'Unknown Duration',
+              isDirectStream: true
+            });
+          } else {
+            // Final fallback to sample audio
+            res.json({
+              success: false,
+              audioUrl: 'https://www.learningcontainer.com/wp-content/uploads/2020/02/Kalimba.mp3',
+              title: title,
+              duration: 'Unknown Duration',
+              isDirectStream: false,
+              error: 'All yt-dlp approaches failed'
+            });
+          }
+        });
+        
+        altYtdlp.on('error', (error) => {
+          console.log('❌ Alternative yt-dlp also failed:', error);
+          res.json({
+            success: false,
+            audioUrl: 'https://www.learningcontainer.com/wp-content/uploads/2020/02/Kalimba.mp3',
+            title: title,
+            duration: 'Unknown Duration',
+            isDirectStream: false,
+            error: 'yt-dlp not available'
+          });
         });
       }
     });
