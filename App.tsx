@@ -80,8 +80,9 @@ export default function App() {
           
           console.log('Audio data received:', audioData);
           
-          // Check if we have a valid audio URL
-          if (!audioData.audioUrl) {
+          // Check if we have a valid audio URL (server returns 'url' not 'audioUrl')
+          const audioUrl = audioData.audioUrl || audioData.url;
+          if (!audioUrl) {
             throw new Error('No audio URL received from server');
           }
           
@@ -90,11 +91,11 @@ export default function App() {
             await sound.unloadAsync();
           }
 
-          console.log('Creating sound with URL:', audioData.audioUrl);
+          console.log('Creating sound with URL:', audioUrl);
 
           // Create new sound object for direct streaming
           const { sound: newSound } = await Audio.Sound.createAsync(
-            { uri: audioData.audioUrl },
+            { uri: audioUrl },
             { 
               shouldPlay: true, 
               isLooping: false
