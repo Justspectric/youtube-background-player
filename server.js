@@ -32,25 +32,43 @@ async function extractAudioFromYouTube(url) {
     
     // Try to get real YouTube audio using a working service
     try {
-      const audioResponse = await fetch(`https://youtube-mp36.p.rapidapi.com/dl?id=${videoId[1]}`, {
+      const audioResponse = await fetch(`https://api.vevioz.com/api/button/mp3/${videoId[1]}`);
+      
+      if (audioResponse.ok) {
+        const audioData = await audioResponse.json();
+        if (audioData.url) {
+          return {
+            title: title,
+            duration: audioData.duration || 'Unknown Duration',
+            audioUrl: audioData.url // Real YouTube audio!
+          };
+        }
+      }
+    } catch (error) {
+      console.log('Audio extraction failed, using fallback');
+    }
+    
+    // Try another service
+    try {
+      const audioResponse2 = await fetch(`https://youtube-mp36.p.rapidapi.com/dl?id=${videoId[1]}`, {
         headers: {
           'X-RapidAPI-Key': 'free',
           'X-RapidAPI-Host': 'youtube-mp36.p.rapidapi.com'
         }
       });
       
-      if (audioResponse.ok) {
-        const audioData = await audioResponse.json();
-        if (audioData.link) {
+      if (audioResponse2.ok) {
+        const audioData2 = await audioResponse2.json();
+        if (audioData2.link) {
           return {
             title: title,
-            duration: audioData.duration || 'Unknown Duration',
-            audioUrl: audioData.link // Real YouTube audio!
+            duration: audioData2.duration || 'Unknown Duration',
+            audioUrl: audioData2.link // Real YouTube audio!
           };
         }
       }
     } catch (error) {
-      console.log('Audio extraction failed, using fallback');
+      console.log('Second audio extraction failed, using fallback');
     }
     
     // Fallback: Use a different test audio for each video
