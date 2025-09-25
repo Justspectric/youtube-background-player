@@ -33,15 +33,19 @@ async function extractAudioFromYouTube(url) {
 
     const outputPath = path.join(audioDir, `${videoId[1]}.%(ext)s`);
     
-    // yt-dlp command to extract audio with bot detection bypass
+    // yt-dlp command to extract audio with aggressive bot detection bypass
     const ytdlp = spawn('yt-dlp', [
       '-f', 'bestaudio[ext=m4a]/bestaudio',
       '--no-playlist',
       '--output', outputPath,
       '--write-info-json',
-      '--extractor-args', 'youtube:player_client=android',
-      '--sleep-interval', '1',
-      '--max-sleep-interval', '3',
+      '--extractor-args', 'youtube:player_client=android,web',
+      '--sleep-interval', '2',
+      '--max-sleep-interval', '5',
+      '--retries', '3',
+      '--fragment-retries', '3',
+      '--user-agent', 'Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36',
+      '--referer', 'https://www.youtube.com/',
       url
     ]);
 
