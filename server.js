@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
-const fetch = require('node-fetch');
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -9,89 +11,106 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Function to extract audio using a web-based service
+// Create directories for audio files
+const audioDir = path.join(__dirname, 'audio');
+if (!fs.existsSync(audioDir)) {
+  fs.mkdirSync(audioDir, { recursive: true });
+}
+
+// Function to extract audio using yt-dlp
 async function extractAudioFromYouTube(url) {
-  try {
+  return new Promise((resolve, reject) => {
     console.log(`Processing URL: ${url}`);
     
     // Extract video ID from URL
     const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
     if (!videoId) {
-      throw new Error('Invalid YouTube URL');
+      reject(new Error('Invalid YouTube URL. Please use format: https://www.youtube.com/watch?v=VIDEO_ID'));
+      return;
     }
     
     console.log(`Extracted video ID: ${videoId[1]}`);
 
-    // Get video info for title
-    const infoResponse = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
-    let title = 'Unknown Title';
-    if (infoResponse.ok) {
-      const infoData = await infoResponse.json();
-      title = infoData.title || 'Unknown Title';
-    }
+    const outputPath = path.join(audioDir, `${videoId[1]}.%(ext)s`);
     
-    // Try to get real YouTube audio using a working service
-    try {
-      const audioResponse = await fetch(`https://api.vevioz.com/api/button/mp3/${videoId[1]}`);
+    // yt-dlp command to extract audio (try M4A first, then fallback to best audio)
+    const ytdlp = spawn('yt-dlp', [
+      '-f', 'bestaudio[ext=m4a]/bestaudio',
+      '--no-playlist',
+      '--output', outputPath,
+      '--write-info-json',
+      url
+    ]);
+
+    let title = '';
+    let duration = '';
+    let errorOutput = '';
+
+    ytdlp.stdout.on('data', (data) => {
+      const output = data.toString().trim();
+      console.log('yt-dlp stdout:', output);
+    });
+
+    ytdlp.stderr.on('data', (data) => {
+      const error = data.toString();
+      console.log('yt-dlp stderr:', error);
+      errorOutput += error;
+    });
+
+    ytdlp.on('error', (error) => {
+      console.log('yt-dlp error:', error);
+      reject(new Error(`Failed to start yt-dlp: ${error.message}`));
+    });
+
+    // Add timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      ytdlp.kill();
+      reject(new Error('yt-dlp process timed out after 60 seconds'));
+    }, 60000);
+
+    ytdlp.on('close', (code) => {
+      clearTimeout(timeout);
+      console.log(`yt-dlp process finished with code: ${code}`);
       
-      if (audioResponse.ok) {
-        const audioData = await audioResponse.json();
-        if (audioData.url) {
-          return {
-            title: title,
-            duration: audioData.duration || 'Unknown Duration',
-            audioUrl: audioData.url // Real YouTube audio!
-          };
+      if (code === 0) {
+        // Look for the actual downloaded file (could be .webm, .m4a, etc.)
+        const audioDirFiles = fs.readdirSync(audioDir);
+        console.log('Audio directory files:', audioDirFiles);
+        
+        const audioFile = audioDirFiles.find(file => file.startsWith(videoId[1]) && (file.endsWith('.m4a') || file.endsWith('.webm') || file.endsWith('.mp3')));
+        
+        if (audioFile) {
+          const fullPath = path.join(audioDir, audioFile);
+          console.log('Found audio file:', audioFile);
+          
+          // Try to read metadata from info JSON file
+          const infoFile = audioDirFiles.find(file => file.startsWith(videoId[1]) && file.endsWith('.info.json'));
+          if (infoFile) {
+            try {
+              const infoData = JSON.parse(fs.readFileSync(path.join(audioDir, infoFile), 'utf8'));
+              title = infoData.title || 'Unknown Title';
+              duration = infoData.duration ? `${Math.floor(infoData.duration / 60)}:${(infoData.duration % 60).toString().padStart(2, '0')}` : 'Unknown Duration';
+              console.log('Metadata from JSON:', { title, duration });
+            } catch (error) {
+              console.log('Error reading info JSON:', error);
+            }
+          }
+          
+          resolve({
+            title: title || 'Unknown Title',
+            duration: duration || 'Unknown Duration',
+            audioFile: fullPath,
+            audioUrl: `https://web-production-e3c15.up.railway.app/audio/${audioFile}`
+          });
+        } else {
+          console.log('No audio file found for video ID:', videoId[1]);
+          reject(new Error('Audio file was not created'));
         }
+      } else {
+        reject(new Error(`yt-dlp failed with code ${code}: ${errorOutput}`));
       }
-    } catch (error) {
-      console.log('Audio extraction failed, using fallback');
-    }
-    
-    // Try another service
-    try {
-      const audioResponse2 = await fetch(`https://youtube-mp36.p.rapidapi.com/dl?id=${videoId[1]}`, {
-        headers: {
-          'X-RapidAPI-Key': 'free',
-          'X-RapidAPI-Host': 'youtube-mp36.p.rapidapi.com'
-        }
-      });
-      
-      if (audioResponse2.ok) {
-        const audioData2 = await audioResponse2.json();
-        if (audioData2.link) {
-          return {
-            title: title,
-            duration: audioData2.duration || 'Unknown Duration',
-            audioUrl: audioData2.link // Real YouTube audio!
-          };
-        }
-      }
-    } catch (error) {
-      console.log('Second audio extraction failed, using fallback');
-    }
-    
-    // Fallback: Use a different test audio for each video
-    const testAudios = [
-      'https://www.learningcontainer.com/wp-content/uploads/2020/02/Kalimba.mp3',
-      'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav',
-      'https://file-examples.com/storage/fe68c4b4a0b4b4b4b4b4b4b/2017/11/file_example_MP3_700KB.mp3'
-    ];
-    
-    // Use different audio based on video ID
-    const audioIndex = parseInt(videoId[1].slice(-1), 16) % testAudios.length;
-    const workingAudioUrl = testAudios[audioIndex];
-    
-    return {
-      title: title,
-      duration: 'Unknown Duration',
-      audioUrl: workingAudioUrl
-    };
-    
-  } catch (error) {
-    console.error('Error extracting audio:', error);
-    throw error;
-  }
+    });
+  });
 }
 
 // API endpoint to extract audio
@@ -122,14 +141,18 @@ app.post('/api/extract-audio', async (req, res) => {
   }
 });
 
+// Serve audio files
+app.use('/audio', express.static(audioDir));
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'YouTube audio server is running' });
+  res.json({ status: 'OK', message: 'yt-dlp server is running' });
 });
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 YouTube audio server running on port ${PORT}`);
+  console.log(`🚀 yt-dlp server running on port ${PORT}`);
+  console.log(`📁 Audio files will be saved to: ${audioDir}`);
 });
 
 module.exports = app;
