@@ -34,7 +34,8 @@ async function extractAudioFromYouTube(url) {
     const outputPath = path.join(audioDir, `${videoId[1]}.%(ext)s`);
     
     // yt-dlp command to extract audio (try M4A first, then fallback to best audio)
-    const ytdlp = spawn('yt-dlp', [
+    const ytdlp = spawn('python3', [
+      '-m', 'yt_dlp',
       '-f', 'bestaudio[ext=m4a]/bestaudio',
       '--no-playlist',
       '--output', outputPath,
