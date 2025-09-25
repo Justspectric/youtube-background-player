@@ -35,17 +35,17 @@ async function extractAudioFromYouTube(url) {
     
     // yt-dlp command to extract audio and convert to MP3
     const ytdlp = spawn('yt-dlp', [
-      '-f', 'bestaudio',
+      '-f', 'bestaudio[ext=m4a]/bestaudio',
       '--no-playlist',
       '--output', outputPath,
       '--write-info-json',
       '--extract-audio',
       '--audio-format', 'mp3',
       '--audio-quality', '0',
-      '--extractor-args', 'youtube:player_client=android',
+      '--extractor-args', 'youtube:player_client=web',
       '--sleep-interval', '1',
       '--max-sleep-interval', '3',
-      '--user-agent', 'Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36',
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       url
     ]);
 
