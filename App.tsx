@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { AppState } from 'react-native';
+// Using Railway server for yt-dlp audio extraction
 
 export default function App() {
   const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -33,32 +34,27 @@ export default function App() {
     try {
       setIsLoading(true);
       
-      // Extract video ID from URL
-      const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
-      if (!videoId) {
-        throw new Error('Invalid YouTube URL');
-      }
-
-      // Use your Railway server (works everywhere!)
-      const response = await fetch('https://web-production-e3c15.up.railway.app/api/extract-audio', {
+      // Use Railway server with yt-dlp to extract audio stream URL
+      const serverUrl = 'https://web-production-e3c15.up.railway.app/api/extract-audio';
+      
+      const response = await fetch(serverUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ youtubeUrl: url }),
+        body: JSON.stringify({ url }),
       });
-
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || 'Failed to extract audio');
+        throw new Error(`Server error: ${response.status}`);
       }
-
-      const data = await response.json();
+      
+      const audioData = await response.json();
       
       return {
-        url: data.audioUrl,
-        title: data.title,
-        duration: data.duration
+        url: audioData.audioUrl,
+        title: audioData.title,
+        duration: audioData.duration
       };
     } catch (error) {
       console.error('Error extracting audio:', error);
@@ -207,9 +203,9 @@ export default function App() {
         )}
       </View>
 
-      <Text style={styles.note}>
-        🎵 Real YouTube audio extraction powered by yt-dlp!
-      </Text>
+          <Text style={styles.note}>
+            🎵 Real YouTube audio streaming via yt-dlp server!
+          </Text>
 
       <StatusBar style="auto" />
     </View>

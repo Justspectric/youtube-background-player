@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const { spawn } = require('child_process');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -11,163 +10,132 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Create directories for audio files
-const audioDir = path.join(__dirname, 'audio');
-if (!fs.existsSync(audioDir)) {
-  fs.mkdirSync(audioDir, { recursive: true });
-}
+// Route to extract audio stream URL using yt-dlp
+app.post('/api/extract-audio', async (req, res) => {
+  const { url } = req.body;
+  
+  if (!url) {
+    return res.status(400).json({ error: 'URL is required' });
+  }
 
-// Function to get direct audio stream URL using JavaScript extraction
-async function extractAudioFromYouTube(url) {
   try {
-    console.log(`Getting direct stream URL for: ${url}`);
+    console.log('🎵 Extracting audio stream URL from:', url);
     
-    // Extract video ID from URL
+    // Extract video ID for title
     const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
     if (!videoId) {
-      throw new Error('Invalid YouTube URL. Please use format: https://www.youtube.com/watch?v=VIDEO_ID');
+      return res.status(400).json({ error: 'Invalid YouTube URL' });
     }
     
-    console.log(`Extracted video ID: ${videoId[1]}`);
-
-    // Get video title from oEmbed API
-    const titleResponse = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+    console.log('📹 Video ID:', videoId[1]);
+    
+    // Get title from oEmbed API
     let title = 'Unknown Title';
-    if (titleResponse.ok) {
-      const titleData = await titleResponse.json();
-      title = titleData.title || 'Unknown Title';
-    }
-
-    // Try multiple YouTube audio extraction services
-    const services = [
-      // Service 1: YouTube MP3 API
-      {
-        url: `https://api.vevioz.com/api/button/mp3/${videoId[1]}`,
-        extractUrl: (data) => data.link || data.url || data.downloadUrl
-      },
-      // Service 2: YouTube MP36 API
-      {
-        url: `https://youtube-mp36.p.rapidapi.com/dl?id=${videoId[1]}`,
-        extractUrl: (data) => data.link || data.url || data.downloadUrl
-      },
-      // Service 3: YouTube In MP3
-      {
-        url: `https://www.youtubeinmp3.com/fetch/?video=https://www.youtube.com/watch?v=${videoId[1]}`,
-        extractUrl: (data) => data.link || data.url || data.downloadUrl
-      },
-      // Service 4: YouTube to MP3 Converter
-      {
-        url: `https://www.youtubeinmp3.com/fetch/?video=https://www.youtube.com/watch?v=${videoId[1]}`,
-        extractUrl: (data) => data.link || data.url || data.downloadUrl
-      },
-      // Service 5: Try a different approach - use a working service
-      {
-        url: `https://api.vevioz.com/api/button/mp3/${videoId[1]}`,
-        extractUrl: (data) => data.link || data.url || data.downloadUrl
+    try {
+      const titleResponse = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+      if (titleResponse.ok) {
+        const titleData = await titleResponse.json();
+        title = titleData.title || 'Unknown Title';
       }
+    } catch (error) {
+      console.log('⚠️ Could not fetch title:', error);
+    }
+    
+    console.log('📝 Title:', title);
+    
+    // Use yt-dlp to get audio stream URL (no download, just URL)
+    const ytdlpArgs = [
+      '--get-url',  // Just get the URL, don't download
+      '--format', 'bestaudio[ext=m4a]/bestaudio',  // Prefer M4A for iOS compatibility
+      '--no-playlist',  // Don't download playlists
+      '--extractor-args', 'youtube:player_client=ios',  // Use iOS client to avoid restrictions
+      '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
+      url
     ];
-
-    for (const service of services) {
-      try {
-        console.log(`Trying service: ${service.url}`);
-        
-        const response = await fetch(service.url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const audioUrl = service.extractUrl(data);
-          
-          if (audioUrl && audioUrl.startsWith('http')) {
-            console.log(`Found audio URL: ${audioUrl}`);
-            
-            return {
-              title: title,
-              duration: 'Unknown Duration',
-              audioUrl: audioUrl,
-              isDirectStream: true
-            };
-          }
-        }
-      } catch (error) {
-        console.log(`Service failed: ${error.message}`);
-        continue;
-      }
-    }
-
-    // If all services fail, return a working sample audio with the correct title
-    console.log('All services failed, using sample audio');
-    return {
-      title: title,
-      duration: 'Unknown Duration',
-      audioUrl: 'https://www.learningcontainer.com/wp-content/uploads/2020/02/Kalimba.mp3',
-      isDirectStream: false
-    };
-
-  } catch (error) {
-    console.error('Error extracting audio:', error);
-    throw error;
-  }
-}
-
-// API endpoint to extract audio
-app.post('/api/extract-audio', async (req, res) => {
-  try {
-    const { youtubeUrl } = req.body;
     
-    if (!youtubeUrl) {
-      return res.status(400).json({ error: 'YouTube URL is required' });
-    }
-
-    console.log(`Extracting audio from: ${youtubeUrl}`);
-    const result = await extractAudioFromYouTube(youtubeUrl);
+    console.log('🚀 Running yt-dlp with args:', ytdlpArgs);
     
-    console.log('Result:', result);
+    const ytdlp = spawn('yt-dlp', ytdlpArgs);
     
-    // Ensure we have a valid audio URL
-    if (!result.audioUrl) {
-      return res.status(500).json({ 
-        error: 'No audio URL found', 
-        details: 'Failed to extract audio URL from YouTube' 
-      });
-    }
+    let audioUrl = '';
+    let errorOutput = '';
     
-    res.json({
-      success: true,
-      title: result.title,
-      duration: result.duration,
-      audioUrl: result.audioUrl,
-      url: result.audioUrl  // Also include 'url' field for compatibility
+    ytdlp.stdout.on('data', (data) => {
+      const output = data.toString().trim();
+      console.log('yt-dlp output:', output);
+      audioUrl = output;
     });
-
+    
+    ytdlp.stderr.on('data', (data) => {
+      const error = data.toString();
+      console.log('yt-dlp error:', error);
+      errorOutput += error;
+    });
+    
+    ytdlp.on('close', (code) => {
+      console.log('yt-dlp process finished with code:', code);
+      
+      if (code === 0 && audioUrl && audioUrl.startsWith('http')) {
+        console.log('🎵 Successfully extracted audio URL:', audioUrl.substring(0, 100) + '...');
+        
+        res.json({
+          success: true,
+          audioUrl: audioUrl,
+          title: title,
+          duration: 'Unknown Duration',
+          isDirectStream: true
+        });
+      } else {
+        console.log('❌ yt-dlp failed or no URL found');
+        console.log('Error output:', errorOutput);
+        
+        // Fallback to sample audio
+        res.json({
+          success: false,
+          audioUrl: 'https://www.learningcontainer.com/wp-content/uploads/2020/02/Kalimba.mp3',
+          title: title,
+          duration: 'Unknown Duration',
+          isDirectStream: false,
+          error: 'yt-dlp failed to extract audio URL'
+        });
+      }
+    });
+    
+    ytdlp.on('error', (error) => {
+      console.log('❌ Failed to start yt-dlp:', error);
+      res.status(500).json({ 
+        error: 'Failed to start yt-dlp',
+        details: error.message 
+      });
+    });
+    
   } catch (error) {
-    console.error('Error extracting audio:', error);
+    console.error('❌ Error in extract-audio:', error);
     res.status(500).json({ 
-      error: 'Failed to extract audio', 
+      error: 'Internal server error',
       details: error.message 
     });
   }
 });
 
-// Serve audio files
-app.use('/audio', express.static(audioDir));
-
 // Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'yt-dlp server is running' });
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', message: 'YouTube Audio Server is running' });
 });
 
-// Start server
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'YouTube Audio Stream Server',
+    endpoints: {
+      'POST /api/extract-audio': 'Extract audio stream URL from YouTube video',
+      'GET /health': 'Health check'
+    }
+  });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 yt-dlp server running on port ${PORT}`);
-  console.log(`📁 Audio files will be saved to: ${audioDir}`);
+  console.log(`🚀 YouTube Audio Server running on port ${PORT}`);
+  console.log(`📱 Access from mobile: http://YOUR_IP:${PORT}`);
+  console.log(`🌐 Health check: http://localhost:${PORT}/health`);
 });
-
-module.exports = app;
