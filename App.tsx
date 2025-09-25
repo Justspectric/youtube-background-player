@@ -78,25 +78,26 @@ export default function App() {
           // Extract audio from YouTube URL
           const audioData = await extractAudioFromYouTube(youtubeUrl);
           
+          console.log('Audio data received:', audioData);
+          
+          // Check if we have a valid audio URL
+          if (!audioData.audioUrl) {
+            throw new Error('No audio URL received from server');
+          }
+          
           // Stop current sound if playing
           if (sound) {
             await sound.unloadAsync();
           }
+
+          console.log('Creating sound with URL:', audioData.audioUrl);
 
           // Create new sound object for direct streaming
           const { sound: newSound } = await Audio.Sound.createAsync(
             { uri: audioData.audioUrl },
             { 
               shouldPlay: true, 
-              isLooping: false,
-              // Optimize for streaming
-              progressUpdateIntervalMillis: 1000,
-              positionMillis: 0,
-              rate: 1.0,
-              shouldCorrectPitch: true,
-              volume: 1.0,
-              isMuted: false,
-              isNew: true
+              isLooping: false
             }
           );
 

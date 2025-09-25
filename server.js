@@ -119,6 +119,16 @@ app.post('/api/extract-audio', async (req, res) => {
     console.log(`Extracting audio from: ${youtubeUrl}`);
     const result = await extractAudioFromYouTube(youtubeUrl);
     
+    console.log('Result:', result);
+    
+    // Ensure we have a valid audio URL
+    if (!result.audioUrl) {
+      return res.status(500).json({ 
+        error: 'No audio URL found', 
+        details: 'Failed to extract audio URL from YouTube' 
+      });
+    }
+    
     res.json({
       success: true,
       title: result.title,
