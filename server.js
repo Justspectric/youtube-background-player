@@ -32,7 +32,7 @@ async function extractAudioFromYouTube(url) {
     
     // For now, return a working audio URL for testing background audio
     // This will work to test if background audio and control center work
-    const workingAudioUrl = 'https://www2.cs.uic.edu/~i101/SoundFiles/BabyElephantWalk60.wav';
+    const workingAudioUrl = 'https://file-examples.com/storage/fe68c4b4a0b4b4b4b4b4b4b/2017/11/file_example_MP3_700KB.mp3';
     
     return {
       title: title,
