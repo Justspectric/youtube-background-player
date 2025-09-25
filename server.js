@@ -42,12 +42,12 @@ async function extractAudioFromYouTube(url) {
       '--extract-audio',
       '--audio-format', 'mp3',
       '--audio-quality', '0',
-      '--extractor-args', 'youtube:player_client=tv_embedded',
-      '--sleep-interval', '2',
-      '--max-sleep-interval', '5',
-      '--retries', '3',
-      '--fragment-retries', '3',
-      '--user-agent', 'Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1',
+      '--extractor-args', 'youtube:player_client=ios',
+      '--sleep-interval', '1',
+      '--max-sleep-interval', '3',
+      '--retries', '2',
+      '--fragment-retries', '2',
+      '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
       url
     ]);
 
